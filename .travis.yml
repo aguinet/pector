@@ -15,6 +15,6 @@ install:
 script:
     - mkdir _build
     - cd _build
-    - cmake ..
+    - cmake -DCMAKE_BUILD_TYPE=debug ..
     - make
     - make test
