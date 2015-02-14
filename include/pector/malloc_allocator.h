@@ -34,7 +34,7 @@ struct dummy2 { };
 
 template <class T, bool make_reallocable = true, bool make_size_aware = false>
 struct malloc_allocator: public std::conditional<make_reallocable, reallocable_allocator, internals::dummy1>::type
-#ifdef __GNUC__
+#if defined _WIN32 || defined __GNUC__
 						 , public std::conditional<make_size_aware, size_aware_allocator, internals::dummy2>::type
 #endif
 {
@@ -87,11 +87,16 @@ public:
 
     void destroy(pointer p) { p->~value_type(); }
 
-#ifdef __GNUC__
+#if defined __GNUC__ && !defined _WIN32
 	size_type usable_size(const_pointer p) const
 	{
 		return malloc_usable_size(const_cast<pointer>(p))/sizeof(value_type);
 	}
+#elif defined _WIN32
+    size_type usable_size(const_pointer p) const
+    {
+        return _msize(const_cast<pointer>(p))/sizeof(value_type);
+    }
 #endif
 
 	pointer realloc(pointer p, size_type const n)

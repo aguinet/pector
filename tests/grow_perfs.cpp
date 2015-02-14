@@ -28,6 +28,17 @@
 
 #define NRUNS 9
 
+#ifdef _WIN32
+#   warning NOT supported on this platform
+void *malloc_get_state()
+{
+    return nullptr;
+}
+void malloc_set_state(void *)
+{
+}
+#endif
+
 template <class V>
 double one_run(int const N)
 {
