@@ -28,7 +28,7 @@
 
 #define NRUNS 9
 
-#ifdef _WIN32
+#if defined _WIN32 || defined __APPLE__
 #   warning NOT supported on this platform
 void *malloc_get_state()
 {

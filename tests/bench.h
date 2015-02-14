@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef PECTOR_BENCH_H
 #define PECTOR_BENCH_H
 

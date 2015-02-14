@@ -1,3 +1,5 @@
+#pragma once
+
 #ifndef PECTOR_TYPES_TEST_H
 #define PECTOR_TYPES_TEST_H
 

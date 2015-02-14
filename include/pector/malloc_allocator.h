@@ -15,6 +15,7 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
+#pragma once
 
 #ifndef PECTOR_MALLOC_ALLOCATOR_H
 #define PECTOR_MALLOC_ALLOCATOR_H
@@ -23,7 +24,11 @@
 #include <cstddef>
 
 #include <pector/enhanced_allocators.h>
+#ifdef __APPLE__
+#include <malloc/malloc.h>
+#else
 #include <malloc.h>
+#endif
 
 namespace pt {
 
@@ -34,7 +39,7 @@ struct dummy2 { };
 
 template <class T, bool make_reallocable = true, bool make_size_aware = false>
 struct malloc_allocator: public std::conditional<make_reallocable, reallocable_allocator, internals::dummy1>::type
-#if defined _WIN32 || defined __GNUC__
+#if defined _WIN32 || defined __APPLE__ || defined __GNUC__
 						 , public std::conditional<make_size_aware, size_aware_allocator, internals::dummy2>::type
 #endif
 {
@@ -87,7 +92,7 @@ public:
 
     void destroy(pointer p) { p->~value_type(); }
 
-#if defined __GNUC__ && !defined _WIN32
+#if defined __GNUC__ && !defined _WIN32 && !defined __APPLE__
 	size_type usable_size(const_pointer p) const
 	{
 		return malloc_usable_size(const_cast<pointer>(p))/sizeof(value_type);
@@ -96,6 +101,11 @@ public:
     size_type usable_size(const_pointer p) const
     {
         return _msize(const_cast<pointer>(p))/sizeof(value_type);
+    }
+#elif defined __APPLE__
+    size_type usable_size(const_pointer p) const
+    {
+        return malloc_size(const_cast<pointer>(p))/sizeof(value_type);
     }
 #endif
 
