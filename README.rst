@@ -9,6 +9,7 @@ For now, it is known to be compatible with these compilers:
 
 * GCC 4.8.x and 4.9.x (in C++11 mode)
 * Clang 3.4, 3.5, 3.6 (in C++11 mode)
+* Clang under OSX (in C++11 mode)
 * Microsoft Visual Studio 2015
 
 No C++98-only compiler is supported at this moment. This will be planned for
@@ -537,6 +538,7 @@ Thanks to Serge "serge-sans-paille" Guelton
 (https://github.com/serge-sans-paille) and Joel Falcou for their initial
 remarks, advices and/or fixes!
 
+See CONTRIBUTORS for the list of contributors.
 
 Contacts
 --------
