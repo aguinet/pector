@@ -28,17 +28,6 @@
 
 #define NRUNS 9
 
-#if defined _WIN32 || defined __APPLE__
-#   warning NOT supported on this platform
-void *malloc_get_state()
-{
-    return nullptr;
-}
-void malloc_set_state(void *)
-{
-}
-#endif
-
 template <class V>
 double one_run(int const N)
 {
@@ -56,9 +45,7 @@ double perf_N(const char* name, int const N)
 {
 	double runs[NRUNS];
 	for (size_t i = 0; i < NRUNS; i++) {
-		void* state = malloc_get_state();
 		runs[i] = one_run<V>(N);
-		malloc_set_state(state);
 	}
 
 	std::sort(std::begin(runs), std::end(runs));
