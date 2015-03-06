@@ -1,0 +1,15 @@
+if ((CMAKE_COMPILER_IS_GNUCC) OR ("CMAKE_CXX_COMPILER_ID" STREQUAL "Clang"))
+	set(GCC_OPTS "")
+	if (GCC_ARCH)
+		set(GCC_OPTS "-march=${GCC_ARCH} -mtune=${GCC_ARCH}")
+	endif()
+
+	set(CMAKE_CXX_FLAGS_COMMON "-Wall -Wextra -std=c++11 ${GCC_OPTS}")
+	if (${COVERAGE})
+		set(CMAKE_CXX_FLAGS_COMMON "${CMAKE_CXX_FLAGS_COMMON} -fprofile-arcs -ftest-coverage")
+	endif()
+
+	set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_COMMON} -g3")
+	set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_COMMON} -g3 -O3 -DNDEBUG")
+	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_COMMON} -O3 -DNDEBUG")
+endif()

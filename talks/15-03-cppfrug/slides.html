@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+
+		<title>pector: yet another C++11 vector implementation</title>
+
+        <meta name="description" content="">
+        <meta name="author" content="Adrien Guinet">
+
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+
+        <link rel="stylesheet" href="css/reveal.css">
+        <link rel="stylesheet" href="css/theme/night.css" id="theme">
+
+        <!-- Code syntax highlighting -->
+        <link rel="stylesheet" href="lib/css/zenburn.css">
+
+        <!-- Printing and PDF exports -->
+        <script>
+            var link = document.createElement( 'link' );
+            link.rel = 'stylesheet';
+            link.type = 'text/css';
+            link.href = window.location.search.match( /print-pdf/gi ) ? 'css/print/pdf.css' : 'css/print/paper.css';
+            document.getElementsByTagName( 'head' )[0].appendChild( link );
+        </script>
+
+		<style>
+		span.cf { font-style: italic; }
+		</style>
+
+		<style>
+		span.tt { font-family:monospace };
+		</style>
+
+	</head>
+
+	<body>
+
+		<div class="reveal">
+
+			<div class="slides">
+
+				<section>
+					<h2>pector</h2>
+					<h4><i>yet another C++11 vector implementation...</i></h4>
+					<p><a href="https://github.com/aguinet/pector">https://github.com/aguinet/pector</a></p>
+					<p>&nbsp</p>
+					<p><small>C++FRUG #6 - Adrien Guinet (<a href="https://twitter.com/adriengnt">@adriengnt</a>)<br />5 mars 2015</small></p>
+				</section>
+
+				<section>
+					<h2>Content of this talk</h2>
+
+					<ul>
+						<li>Issues with <b>std::vector</b></li>
+						<li>Why another implementation?</li>
+						<li>Features of <b>pector</b></li>
+						<!--<li>Use case with a real-life project</li>-->
+						<li>Use <b>pector</b> in your own project</li>
+						<li>Roadmap</li>
+						<li>Conclusion</li>
+					</ul>
+				</section>
+
+				<section>
+					<section>
+						<h2>Issues with <b>std::vector</b></h2>
+						<h3>Use case 1</h3>
+
+						<pre>
+<code data-trim class="c">
+template &lt;class T&gt;
+T* sum(size_t const n, T const* a, T const* b)
+{
+  T* res = (T*) malloc(sizeof(T)*n);
+  for (size_t i = 0; i < n; i++) {
+    res[i] = a[i]+b[i];
+  }
+  return res;
+}
+</code>
+						</pre>
+
+						<div style="font-size: 0.6em">
+							<p>
+							Compiled with: <span class="tt">-O3 -march=native -mtune=native -DNDEBUG</span><br/>
+							Run with <b>n = 100 000 000</b><br/>
+							</p>
+							<table>
+								<tr><td>Integer type</td><td><b>C version</b><td></tr>
+								<tr><td>T = int</td>  <td><b>116ms / 6573 MB/s</b></td></tr>
+								<tr><td>T = short</td><td><b>58ms / 6558 MB/s</b></td></tr>
+							</table>
+						</div>
+						<span class="fragment">
+						<p>This is <b>memory-bound</b>!</p>
+						</span>
+
+					</section>
+
+					<section>
+						<h2>Issues with <b>std::vector</b></h2>
+						<h3>Use case 1</h3>
+
+						<pre>
+<code data-trim class="c">
+// "Modern" C++ poor-man version
+template &lt;class T&gt;
+std::vector&lt;T&gt; sum_vec(size_t const n, T const* a, T const* b)
+{
+  std::vector&lt;T&gt; ret;
+  ret.resize(n);
+  for (size_t i = 0; i < n; i++) {
+  	ret[i] = a[i] + b[i];
+  }
+  return ret;
+}
+</code>
+						</pre>
+
+						<div style="font-size: 0.6em">
+							<p>
+							Compiled with: <span class="tt">-O3 -march=native -mtune=native -DNDEBUG</span><br/>
+							Run with <b>n = 100 000 000</b><br/>
+							</p>
+
+							<table>
+								<tr><td>Integer type</td><td>C version</td><td><b>C++ naive version</b></td></tr>
+								<tr><td>T = int</td>  <td>116ms / 6573 MB/s</td><td><b>178ms / 4286 MB/s</b></td></tr>
+								<tr><td>T = short</td><td>58ms / 6558 MB/s</td><td><b>84ms / 4529 MB/s</b></td></tr>
+							</table>
+						</div>
+						<p><b>WOW!</b></p>
+
+					</section>
+
+					<section>
+						<h2>Issues with <b>std::vector</b></h2>
+						<h3>Use case 1</h3>
+
+						<p><b>Hypothesis:</b>&nbsp;introduced <span class="cf">memset</span> call...</p>
+						<pre>
+<code data-trim class="c">
+template &lt;class T&gt;
+T* sum_memset(size_t const n, T const* a, T const* b)
+{
+  T* res = (T*) malloc(sizeof(int)*n);
+  memset(res, 0, sizeof(int)*n);
+  for (size_t i = 0; i < n; i++) {
+    res[i] = a[i]+b[i];
+  }
+  return res;
+}
+</code>
+						</pre>
+
+						<div style="font-size: 0.6em">
+							<table>
+								<tr><td>Integer type</td><td>C version</td>     <td>C++ naive version</td><td><b>C version + memset</b></tr>
+								<tr><td>T = int</td>  <td>116ms / 6573 MB/s</td><td>178ms / 4286 MB/s</td><td><b>164ms / 4636 MB/s</b></tr>
+								<tr><td>T = short</td><td>58ms / 6558 MB/s</td> <td>84ms / 4529 MB/s</td> <td><b>79ms / 4828 MB/s</b></tr>
+							</table>
+						</div>
+						<p>Demo: double-check with IDA...</p>
+
+					</section>
+
+					<section>
+						<h2>Issues with <b>std::vector</b></h2>
+						<h3>Use case 1</h3>
+
+						<pre>
+<code data-trim class="c">
+template &lt;class T&gt;
+std::vector&lt;T&gt; sum_vec_reserve(size_t const n, T const* a, T const* b)
+{
+  std::vector&lt;T&gt; ret;
+  ret.reserve(n);
+  for (size_t i = 0; i < n; i++) {
+  	ret.emplace_back(a[i] + b[i]);
+  }
+  return ret;
+}
+</code>
+						</pre>
+
+						<div style="font-size: 0.6em">
+							<table>
+								<tr><td>Integer type</td><td>C version</td>     <td>C++ naive version</td><td>C version + memset</td><td><b>C++ version + reserve</b></td></tr>
+								<tr><td>T = int</td>  <td>116ms / 6573 MB/s</td><td>178ms / 4286 MB/s</td><td>164ms / 4636 MB/s </td><td><b>275ms / 2773 MB/s</b></td></tr>
+								<tr><td>T = short</td><td>58ms / 6558 MB/s</td> <td>84ms / 4529 MB/s</td> <td>79ms / 4828 MB/s  </td><td><b>224ms / 1699 MB/s</b></td></tr>
+							</table>
+						</div>
+						<p><b>Loses automatic vectorization... :/</b> (gcc/IDA proof)</p>
+
+					</section>
+
+					<section>
+						<h2>Issues with <b>std::vector</b></h2>
+						<h3>Use case 1 / screwed</h3>
+
+						<p>We need an interface that changes the capacity <b>and</b> the size of the container.</p>
+						<p>The user would be responsible of creating the underlying objects (in-place new).</p>
+					</section>
+
+				</section>
+
+				<section>
+					<section>
+						<h2>Issues with <b>std::vector</b></h2>
+						<h3>Use case 2: growing strategy</h3>
+
+						<p>What happens when a new element is inserted and the
+						capacity of the vector isn't big enough?</p>
+						<span class="fragment">
+						<ul>
+							<li><b>libc++</b> (LLVM, <a href="http://libcxx.llvm.org/">http://libcxx.llvm.org/</a>) <b>multiplies</b> the capacity by <b>2</b></li>
+							<li><b>libstdc++</b> (gcc) does the <b>same</b></li>
+						</ul>
+						</span>
+
+						<p>&nbsp;</p>
+
+						<span class="fragment">
+							<p>What if you want something different?</p>
+						</span>
+
+						<span class="fragment">
+							<p>You need to rewrite a custom container class... (and you don't have time for this ;))</p>
+						</span>
+					</section>
+
+				</section>
+
+				<section>
+					<section>
+						<h2>Issues with <b>std::vector</b></h2>
+						<h3>Use case 3: pushing values</h3>
+
+						<pre>
+<code data-trim class="c">
+template &lt;class T&gt;
+std::vector&lt;T&gt; push_values(size_t const n)
+{
+  std::vector&lt;T&gt; ret;
+  for (size_t i = 0; i < n; i++) {
+	ret.emplace_back(i);
+  }
+  return ret;
+}
+</code>
+						</pre>
+
+						<p>What does <span class="cf">emplace_back</span> do?</p>
+					</section>
+
+					<section>
+						<h4>What does <span class="cf">emplace_back</span> do?</h4>
+
+						<pre>
+	<code data-trim class="c">
+void emplace_back(_Args&&... __args)
+{   
+  if (this->_M_impl._M_finish != this->_M_impl._M_end_of_storage) {
+	// room available!
+	// ...
+  }   
+  else {
+	const size_type __len =
+	  _M_check_len(size_type(1), "vector::_M_emplace_back_aux");
+	pointer __new_start(this->_M_allocate(__len));
+	// Copy objects from the old buffer
+	_Alloc_traits::construct(this->_M_impl, __new_start + size(),
+				 std::forward<_Args>(__args)...);
+	// ...
+	std::_Destroy(this->_M_impl._M_start, this->_M_impl._M_finish,
+			  _M_get_Tp_allocator());
+	_M_deallocate(this->_M_impl._M_start,
+			  this->_M_impl._M_end_of_storage - this->_M_impl._M_start);
+	// [...]
+  }
+}
+	</code>
+						</pre>
+
+						<ul>
+							<li><span class="cf">_M_check_len</span> multiplies the size by 2</li>
+							<li><b>Issue</b>: <b>allocation+free</b> when <span class="cf">realloc</span> might be possible for POD types</li>
+						</ul>
+
+					</section>
+
+					<section>
+						<h4>What does <span class="cf">emplace_back</span> do?</h4>
+						<p><small>Lacks of <span class="cf">memcpy</span> for POD types...</small></p>
+
+						<p><img src="imgs/std_vector_emplace_back.png" /></p>
+
+					</section>
+
+				</section>
+
+				<section>
+					<h3>Issues with <b>std::vector</b></h3>
+					<h4>Use case 4: sizeof(std::vector)</h4>
+
+					<p><i><small>On 64-bits x86 machines, w/ clang, gcc &amp; MSVC2015</small></i></p>
+
+					<ul>
+						<li>Usually, <span class="cf">std::vector&lt;T&gt;</span> looks like this:
+							<pre>
+<code data-trim class="c">
+template &lt;T&gt;
+class vector {
+  T* begin;
+  T* end;
+  T* storage_end;
+};
+</code>
+							</pre>
+						</li>
+						<li>
+							This makes
+							<pre>
+<code data-trim class="c">
+sizeof(std::vector&lt;T&gt;) == 3*sizeof(T*)
+sizeof(std::vector&lt;int&gt;)
+&gt;&nbsp;24
+</code>
+							</pre>
+						</li>
+						<li>On 64-bit systems, we might not need 2<sup>64</sup>/sizeof(T) elements</li>
+					</ul>
+				</section>
+
+				<section>
+					<h2>Why pector?</h2>
+
+					<p>First need was to fix the previous issues...</p>
+
+					<p>
+					Existing libraries:
+					<ul>
+						<li><b>FBVector (folly/facebook)</b>
+							<ul>
+								<li>no move semantics</li>
+								<li>no custom growing strategy (bound to the one of jemalloc)</li>
+							</ul>
+						</li>
+						<li><b>LLVM's SmallVector</b>
+							<ul>
+								<li>Different goal: <pre><code class="c">sizeof(SmallVector&lt;T,N&gt;) = N*sizeof(T) + 3*sizeof(T*)</pre></code></li>
+								<li>Avoid an allocation for "small" vectors</li>
+							</ul>
+						</li>
+					</ul>
+					</p>
+
+					<p>Nothing fixed what we wanted, so we just made something new...</p>
+				</section>
+
+				<section>
+					<h2>Features | resize_no_construct</h2>
+					<h4>related to use case 1</h4>
+
+					<pre>
+<code data-trim class="c">
+template &lt;class T&gt;
+pt::pector&lt;T&gt; sum_pector(size_t const n, T* a, T* b)
+{
+  pt::pector&lt;T&gt; ret;
+  ret.resize_no_construct(n);
+  for (size_t i = 0; i < n; i++) {
+    new (&ret[i]) (a[i] + b[i]);
+  }
+  return ret;
+}
+</code>
+					</pre>
+
+					<div style="font-size: 0.6em">
+						<table>
+							<tr><td>Integer type</td><td>C version</td>     <td>C++ naive version</td><td>C version + memset</td><td>C++ version + reserve</td><td><b>C++ pector version</b></tr>
+							<tr><td>T = int</td>  <td>116ms / 6573 MB/s</td><td>178ms / 4286 MB/s</td><td>164ms / 4636 MB/s </td><td>275ms / 2773 MB/s</td>    <td><b>125ms / 6094 MB/s</b></td></tr>
+							<tr><td>T = short</td><td>58ms / 6558 MB/s</td> <td>84ms / 4529 MB/s</td> <td>79ms / 4828 MB/s  </td><td>224ms / 1699 MB/s</td>    <td><b>62ms / 6090 MB/s</b></td></tr>
+						</table>
+					</div>
+					<p><b>Sounds better !</b></p>
+
+				</section>
+				
+				<section>
+					<section>
+						<h2>Features | growing strategy</h2>
+						<h4>related to use case 2</h4>
+
+						<p>By how much one container should grow if it needs to<br />(during element insertion)?</p>
+
+						<p>&nbsp;</p>
+						<p><pre>
+<code data-trim class="c">
+pt::pector&lt;int, std::allocator&lt;int&gt;, size_t, pt::recommanded_size_multipply_by&lt;3,2&gt;&gt;
+pt::pector&lt;int, std::allocator&lt;int&gt;, size_t, pt::recommanded_size_add_by&lt;10&gt;&gt;
+pt::pector&lt;int, std::allocator&lt;int&gt;, size_t, pt::recommanded_size_dummy&gt;
+</code>
+						</pre></p>
+					</section>
+
+					<section>
+						<h2>Features | growing strategy</h2>
+						<h4>related to use case 2</h4>
+
+						<p><b>Implement your own</b>:</p>
+
+						<pre>
+<code data-trim class="c">
+struct my_recommended_size
+{
+  template &lt;class SizeType&gt;
+  static inline SizeType recommended(
+       SizeType const max_size, // maximum capacity (usually SIZE_MAX/sizeof(T))
+       SizeType const old_cap,  // old capacity of the vector
+       SizeType const new_cap   // new minimal &amp; necessary capacity of the vector
+       )
+  {   
+    SizeType ret;
+    // Compute new wanted capacity here
+    // Check for overflows!
+    assert(ret &gt;= new_cap);
+    return ret;
+  }   
+};
+</code>
+						</pre>
+
+						<p>and <b>share it on github</b> if it is cool :)</p>
+					</section>
+
+					<section>
+						<h2>Features | growing strategy</h2>
+						<h4>related to use case 2</h4>
+
+						<p>Why implementing his own?</p>
+
+						<p><ul>
+							<li>Better fit an underlying allocator's strategy</li>
+							<li>Better memory management in some cases</li>
+						</ul></p>
+					</section>
+				</section>
+
+				<section>
+					<section>
+						<h2>Features | <span class="cf">realloc</span> support</h2>
+						<h4>related to use case 3</h4>
+
+						<ul>
+							<li>Custom traits for <span class="cf">realloc</span> support</li>
+							<li>New allocator interface that supports calls to <span class="cf">realloc</span></li>
+							<li>Only for POD</li>
+						</ul>
+
+						<pre>
+<code data-trim class="c">
+template &lt;class T&gt;
+std::vector&lt;T&gt; push_values(size_t const n)
+{
+  pt::pector&lt;T, pt::malloc_allocator&lt;T&gt;&gt; ret;
+  for (size_t i = 0; i < n; i++) {
+	ret.emplace_back(i);
+  }
+  return ret;
+}
+</code>
+						</pre>
+					</section>
+
+					<section>
+						<h2>Features | <span class="cf">realloc</span> support</h2>
+						<h4>related to use case 3</h4>
+
+						<pre>
+<code data-trim class="c">
+void emplace_back(Args&& ... args)
+{   
+  const size_type new_size = _storage.grow_if_needed(1);
+  _storage.construct_args(_storage.end(), std::forward&lt;Args&gt;(args)...);
+  _storage.force_size(new_size);
+}
+</code>
+						</pre>
+
+						<p><span class="cf">grow_if_needed</span> does two things (if growing is actually needed):<br />
+						<ul>
+							<li>calls <span class="cf">recommanded_size::recommanded</span> to get the new size</li>
+							<li>calls <span class="cf">realloc</span> if available and possible (POD types)</li>
+						</ul>
+						</p>
+
+					</section>
+
+					<section>
+						<h2>features | <span class="cf">realloc</span> support</h2>
+						<h4>related to use case 3</h4>
+
+						<p><img src="imgs/pector_emplace_back_realloc.png" /></p>
+					</section>
+
+					<section>
+						<h3>Features | pushing values performances</h3>
+
+						<p><small>Run on a Core(TM) i7-3520M, gcc 4.9.2 (<span class="tt">-O3 -march=native</span>).<br />Mean run between 10 runs.</small></p>
+						<table><tr>
+						<td>
+							<img style="background-color: #FFFFFF; width: 550px; height: auto" src="../../docs/benchs/std_alloc.svg" /><br />
+							<div style="text-align: center"><b>without</b> <span class="cf">realloc</span> support</div>
+						</td>
+						<td>
+							<img style="background-color: #FFFFFF; width: 550px; height: auto" src="../../docs/benchs/realloc_nsw.svg" />
+							<div style="text-align: center"><b>with</b> <span class="cf">realloc</span> support</div>
+						</td>
+						</tr></table>
+
+					</section>
+				</section>
+
+
+				<section>
+					<h2>Features | POD type support</h2>
+					<h4>related to all use cases</h4>
+
+					<ul>
+						<li>POD-type detection to use <span class="cf">memmove</span>, <span class="cf">memcpy</span> and related when it makes sense</li>
+						<li>Example with <span class="cf">emplace_back</span> (without <span class="cf">realloc</span> support):</li>
+					</ul>
+
+					<p><img src="imgs/pector_emplace_back.png" /></p>
+				</section>
+
+				<section>
+					<h2>Features | custom size type</h2>
+					<h4>related to use case 4</h4>
+
+					<table>
+						<tr>
+							<td>
+								<p>
+								<pre>
+<code data-trim class="c">
+template &lt;T, SizeType&gt;
+class pector {
+  T* data;
+  SizeType _count;
+  SizeType _capacity;
+};
+</code>
+								</pre>
+								<div style="text-align: center"><span class="cf">pector</span> structure</div>
+								</p>
+							</td>
+							<td>
+								<p>
+								<pre>
+<code data-trim class="c">
+template &lt;T&gt;
+class vector {
+  T* begin;
+  T* end;
+  T* storage_end;
+};
+</code>
+								</pre>
+								<div style="text-align: center"><span class="cf">std::vector</span> structure</div>
+								</p>
+							</td>
+						</tr>
+					</table>
+
+					<p>which allows...:<pre>
+<code data-trim class="c">
+sizeof(pt::pector&lt;int, std::allocator&lt;int&gt;, uint32_t&gt;)
+&gt;&nbsp;16
+</code>
+					</pre></p>
+
+					<p><pre>
+<code data-trim class="c">
+sizeof(pt::pector&lt;int, std::allocator&lt;int&gt;, uint16_t&gt;)
+&gt;&nbsp;12
+</code>
+					</pre></p>
+				</section>
+
+				<section>
+					<section>
+						<h3>Features | <span class="cf">malloc_usable_size</span> support</h3>
+						<h4>related to use case 4</h4>
+
+						<p>Use <span class="cf">malloc_usable_size</span> (or equivalent) if available:</p>
+						<p>
+						<ul>
+							<li>Removing the storage of container's capacity (only the object count remains)</li>
+							<li>Availability checked with a trait on the allocator class</li>
+						</ul>
+
+						<p>Example (with <span class="tt">#pragma pack(1)</span>):
+						<pre>
+	<code data-trim class="c">
+sizeof(pt::pector&lt;int, pt::malloc_allocator&lt;true, true&gt;, uint32_t&gt;)
+&gt; 12
+sizeof(pt::pector&lt;int, pt::malloc_allocator&lt;true, true&gt;, uint16_t&gt;)
+&gt; 10
+	</code>
+						</pre>
+						</p>
+					</section>
+
+					<section>
+						<h4>Features | <span class="cf">malloc_usable_size</span> drawbacks</h2>
+
+						<div style="font-size: 0.8em">
+						<ul>
+							<li>Pushing values: <b>performances drop</b> due to calls to <span class="cf">malloc_usable_size</span><br />
+
+					<table><tr>
+					<td>
+						<img style="background-color: #FFFFFF; width: 550px; height: auto" src="../../docs/benchs/realloc_nsw.svg" /><br />
+						<div style="text-align: center"><small><b>without</b> <span class="cf">malloc_usable_size</span> support</small></div>
+					</td>
+					<td>
+						<img style="background-color: #FFFFFF; width: 550px; height: auto" src="../../docs/benchs/realloc_sw.svg" />
+						<div style="text-align: center"><small><b>with</b> <span class="cf">malloc_usable_size</span> support</small></div>
+					</td>
+					</tr></table>
+							</li>
+							<li><b>TODO</b>: use <span class="cf">malloc_usable_size</span> only to get the maximum capacity when allocating (but still store this capacity)</li>
+							<li>May crash when <span class="cf">malloc</span>/<span class="cf">realloc</span>/<span class="cf">free</span> are overloaded with <span class="tt">LD_PRELOAD</span> (or any other mechanism)</li>
+						</ul>
+						</div>
+
+
+					</section>
+				</section>
+
+				<section>
+					<h4>"Fun" fact</h4>
+
+					<pre>
+<code data-trim class="c">
+int main()
+{
+  pector&lt;size_t, malloc_allocator&lt;int, false, false&gt;, size_t, recommended_size_dummy, false&gt; v;
+  v.emplace_back(10);
+  return !(v.front() == 10);
+}
+</code>
+					</pre>
+
+					<p>without checks on what <span class="cf">malloc</span> returns...:</p>
+					<pre>
+<code data-trim class"c">
+pointer allocate(size_type n, const void* /*hint*/ = 0)
+{   
+  pointer const ret = reinterpret_cast&lt;pointer&gt;(malloc(n*sizeof(value_type)));
+  /*if (ret == nullptr) {
+  	throw std::bad_alloc();
+  }*/
+  return ret;
+}
+</code>
+					</pre>
+
+					<p>gives (clang 3.5, -O2):</p>
+					<pre>
+<code data-trim class="asm">
+public main
+xor     eax, eax
+retn
+</code>
+					</pre>
+				</section>
+
+				<!--<section>
+					<h2>Real-life use case</h2>
+
+				</section>-->
+
+				<section>
+					<h2><span class="cf">pector</span> in your project</h2>
+
+					<p>
+					<ul>
+						<li>Compatible with <b>GCC 4.7/4.8/4.9</b>, <b>clang 3.4/3.5</b> &amp; <b>MSVC2015</b></li>
+						<li>Tested under <b>Linux</b>, <b>MacOSX</b> (by Carter Li) and <b>Windows</b></li>
+						<li><b>Header-only library</b> / <b>no external dependency</b>: just copy <span class="tt">include/pector</span> into your project (with a proper include path)</li>
+						<li>Install with <b>CMake</b>: this copies the <span class="cf">pector</span> headers on your system</li>
+					</ul>
+					</p>
+
+					<p>Then, just include:<br />
+					<pre><code>#include &lt;pector/pector.h&gt;</code></pre>
+					</p>
+
+					<p>And replace:
+					<pre><code>std::vector&lt;...&gt;</code></pre>
+					by:
+					<pre><code>pt::pector&lt;...&gt;</code></pre>
+					and add some of the options we just saw
+					</p>
+
+				</section>
+
+				<section>
+					<section>
+						<h2>Roadmap</h2>
+
+						<ul>
+							<li>Use <span class="cf">malloc_usable_size</span> to get the real vector capacity when possible</li>
+							<li>Be less strict between the types of the pector objects that can be swapped</li>
+							<li>Try to match some of the proposed new allocator interfaces</li>
+							<li>C++98 only compiler support</li>
+						</ul>
+					</section>
+
+					<section>
+						<h2>Contribute to <span class="cf">pector</span></h2>
+
+						<ul>
+							<li>Fork it on github: <a href="https://github.com/aguinet/pector">https://github.com/aguinet/pector</a></li>
+							<li>Make your pull request!</li>
+							<li>I should answer rather quickly...</li>
+						</ul>
+
+						<p>&nbsp;</p>
+
+						<span class="fragment">
+						<p><b>Special thanks to</b>:<br />
+						<ul>
+							<li>Serge "serge-sans-paille" Guelton for his initial remarks/contributions and help for this presentation</li>
+							<li>Joel Falcou for his preliminary review</li>
+						</ul>
+						</span>
+						</p>
+					</section>
+				</section>
+
+				<section>
+					<h3>Thanks for your attention!</h3>
+					<h4>Questions?</h4>
+					<p>&nbsp;</p>
+					<p><a href="https://github.com/aguinet/pector">https://github.com/aguinet/pector</a></p>
+					<p>&nbsp;</p>
+					<p><small>
+						Twitter: <a href="https://twitter.com/adriengnt">@adriengnt</a><br />
+						Mail: <a href="mailto:adrien@guinet.me">adrien@guinet.me</a>
+					</small></p>
+				</section>
+
+			</div>
+
+		</div>
+
+		<script src="lib/js/head.min.js"></script>
+		<script src="js/reveal.js"></script>
+
+		<script>
+
+            Reveal.initialize({
+                controls: true,
+                progress: true,
+                history: true,
+                center: true,
+
+                transition: 'slide', // none/fade/slide/convex/concave/zoom
+
+                // Optional reveal.js plugins
+                dependencies: [
+                    { src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+                    //{ src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+                    //{ src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+                    { src: 'plugin/highlight/highlight.js', async: true, condition: function() { return !!document.querySelector( 'pre code' ); }, callback: function() { hljs.initHighlightingOnLoad(); } },
+                    //{ src: 'plugin/zoom-js/zoom.js', async: true }
+                    //{ src: 'plugin/notes/notes.js', async: true }
+                    //{ src: 'plugin/print-pdf/print-pdf.js', async: true }
+                ]
+            });
+		</script>
+
+	</body>
+</html>
